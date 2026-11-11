@@ -1,0 +1,22 @@
+# Data (raw download and preprocessed tiles)
+data/
+
+# Training outputs (checkpoints, logs, figures)
+runs/
+*.pt
+*.pth
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS / editors
+.DS_Store
+.vscode/
+.idea/

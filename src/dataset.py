@@ -9,6 +9,7 @@ from torch.utils.data import Dataset
 from bands import S1_BANDS, S2_BANDS
 
 AGB_SCALE = 100.0  # model predicts AGB / AGB_SCALE
+AGB_MAX = 500.0    # reference pixels above this (Mg/ha) are ignored in loss and metrics (~0.02% of pixels)
 
 
 class BiomassDataset(Dataset):
@@ -41,8 +42,10 @@ class BiomassDataset(Dataset):
         for m in self.modalities:
             x = (d[m][self.idx[m]] - self.mean[m]) / self.std[m]
             xs.append(np.nan_to_num(x, nan=0.0))
-        y = d["agb"][None] / AGB_SCALE
-        valid = np.isfinite(y)
+        agb = d["agb"][None]
+        # a few reference pixels reach thousands of Mg/ha (LiDAR artifacts): exclude them
+        valid = np.isfinite(agb) & (agb <= AGB_MAX)
+        y = agb / AGB_SCALE
         y = np.nan_to_num(y, nan=0.0)
 
         if self.augment:

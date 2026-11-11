@@ -30,7 +30,7 @@ requirements.txt
 biomass.ipynb       main notebook: runs every experiment, figure and table
 src/                helper functions imported by the notebook
   bands.py          channel names and physically meaningful band groups
-  prepare_data.py   prepare(): raw tiles -> one .npz per sample + normalization stats
+  prepare_data.py   prepare(): raw tiles -> one .npz per sample, quality table, normalization stats
   dataset.py        PyTorch Dataset (normalization, band selection, augmentation)
   models.py         U-Net (single input / early fusion) and two-encoder mid-fusion U-Net
   metrics.py        streaming RMSE / MAE / R2 / bias, per-AGB-bin RMSE
@@ -47,7 +47,7 @@ pip install -r requirements.txt
 jupyter lab biomass.ipynb
 ```
 
-1. Put the downloaded data in `data/raw/` and check the layout notes at the top of `src/prepare_data.py`.
+1. The data go in `data/raw/AGB_training_set` and `data/raw/AGB_test_set`.
 2. Run the notebook with `DEBUG = True` first. That trains tiny models for 2 epochs to check the pipeline end to end.
 3. Set `DEBUG = False` for the real runs (a GPU is recommended).
 
@@ -61,7 +61,14 @@ make_cfg(DATA, name="s1s2_mid_noSWIR", modality="s1s2", fusion="mid", drop=["SWI
 
 ## Methodology notes
 
-**Temporal handling.** BioMassters provides up to 12 monthly acquisitions per tile. `prepare()` reduces them to one composite: the S1 per-pixel median, and the S2 cloud-masked median (pixels with CLP above a threshold are ignored). This keeps the model simple. A multi-temporal model (months stacked as channels, or a temporal encoder) would be a natural extension.
+**Data.** The extract is already split: `data/raw/AGB_training_set` (240 tiles) and `data/raw/AGB_test_set` (60 tiles), each with a `metadata.csv`. Every tile has one acquisition (month 10) and its own `S1/`, `S2/` and `AGBM/` folder. 24 training tiles are held out for validation.
+
+**Data quality** (written to `data/processed/<split>/tiles.csv`):
+- S1: about 1 in 9 tiles has the ASC or DSC orbit missing (-9999).
+- S2: a few tiles are mostly empty (all bands 0) or have CLP = 255.
+- AGB: a handful of reference pixels reach thousands of Mg/ha (the 99.99th percentile is about 550). Pixels above 500 Mg/ha are excluded from the loss and metrics (`AGB_MAX` in `dataset.py`).
+
+Missing inputs are stored as NaN and fall back to the channel mean after normalization. Cloudy S2 pixels are kept by default, since with one date there is nothing to replace them with. `prepare(..., mask_clouds=True)` blanks them instead.
 
 **Normalization.** Per-channel z-score using training-set statistics. S1 is already in dB. Missing values (S1 nodata, fully clouded S2 pixels) are set to 0 after normalization, which is the channel mean.
 
@@ -85,9 +92,9 @@ Comparing the two tells you whether a band carries unique information or is only
 ## Things to watch for
 
 - Saturation: both C-band SAR and optical reflectance lose sensitivity at high biomass, so expect regression to the mean and underestimation of dense stands.
-- Residual clouds and shadows in S2 composites, and wet snow or frozen conditions in S1 winter months.
+- Clouds and shadows in the single-date S2 image, and missing S1 orbits.
 - Spatial autocorrelation: keep train, val and test tiles separate (the provided split is tile-based).
-- Seasonality: a median composite mixes leaf-on and leaf-off states.
+- Small dataset (240 training tiles): expect variance between runs, so repeat key experiments with different seeds.
 
 ## References
 
